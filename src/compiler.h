@@ -17,6 +17,22 @@ enum output_type
     OUTPUT_TYPE_EXECUTABLE
 };
 
+typedef struct token
+{
+    int type;
+    int flags;
+
+    union
+    {
+        char cval;
+        const char *sval;
+        unsigned int inum;
+        unsigned long lnum;
+        unsigned long long llnum;
+        void *any;
+    };
+} token;
+
 /**
  * @brief Represents the compile process information.
  *

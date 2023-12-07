@@ -36,6 +36,8 @@ struct vector
     struct vector *saves;
 };
 
+typedef struct vector vector;
+
 struct vector *vector_create(size_t esize);
 void vector_free(struct vector *vector);
 void *vector_at(struct vector *vector, int index);

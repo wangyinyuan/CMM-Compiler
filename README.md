@@ -1,27 +1,15 @@
 # CMM Compiler
 
-This is a README file for the CMM Compiler project.
+HUST SE 软件设计实践课作业
 
 ## Introduction
 
-The CMM Compiler is a compiler for the C-- programming language. It takes C-- source code as input and generates executable machine code.
-
 ## Features
-
-- Lexical analysis
-- Syntax analysis
-- Semantic analysis
-- Code generation
 
 ## Getting Started
 
-To get started with the CMM Compiler, follow these steps:
-
-1. Clone the repository.
-2. Install the required dependencies.
-3. Build the project.
-4. Run the compiler on your C-- source code.
-
 ## Usage
 
-To compile a C-- source file, use the following command:
+## Pitfall
+
+1. 遇到文件第一行 `include` 错误: "命令行错误: 指定的语言模式不兼容"。解决方案是禁用 VSCode 插件 Makefile Tools。

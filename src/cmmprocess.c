@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include "compiler.h"
+#include "../include/compiler.h"
 
 compile_process *compile_process_create(const char *filename, const char *output_filename, int output_type)
 {

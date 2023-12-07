@@ -3,6 +3,20 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+
+enum
+{
+    SUCCESS,
+    FAILURE
+};
+
+enum output_type
+{
+    OUTPUT_TYPE_ASSEMBLY,
+    OUTPUT_TYPE_OBJECT,
+    OUTPUT_TYPE_EXECUTABLE
+};
+
 /**
  * @brief Represents the compile process information.
  *

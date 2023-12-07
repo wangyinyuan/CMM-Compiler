@@ -1,4 +1,4 @@
-#include "../include/compiler.h"
+#include "compiler.h"
 
 // 编译器主入口
 
@@ -12,5 +12,5 @@ int compile_file(const char *filename, const char *output_filename, int output_t
 
     // parsing
 
-        return SUCCESS;
+    return SUCCESS;
 }

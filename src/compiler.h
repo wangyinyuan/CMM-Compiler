@@ -27,6 +27,18 @@ enum output_type
     OUTPUT_TYPE_EXECUTABLE
 };
 
+#define NUMERIC_CASES \
+    case '0':         \
+    case '1':         \
+    case '2':         \
+    case '3':         \
+    case '4':         \
+    case '5':         \
+    case '6':         \
+    case '7':         \
+    case '8':         \
+    case '9'
+
 // token types
 enum
 {
@@ -51,6 +63,7 @@ typedef struct token
 {
     int type;
     int flags;
+    pos pos;
 
     union
     {
@@ -98,7 +111,8 @@ struct compile_process
 // 词法分析器结构体定义
 
 typedef struct lex_process_functions lex_process_functions;
-typedef struct lex_process
+typedef struct lex_process lex_process;
+struct lex_process
 {
     pos pos;
     struct vector *token_vec;
@@ -109,7 +123,7 @@ typedef struct lex_process
     lex_process_functions *function;
 
     void *private;
-} lex_process;
+};
 
 typedef char (*LEX_PROCESS_NEXT_CHAR)(lex_process *process);
 typedef char (*LEX_PROCESS_PEEK_CHAR)(lex_process *process);
@@ -138,5 +152,9 @@ struct vector *lex_process_tokens(lex_process *process);
 
 // lexer
 int lex(lex_process *process);
+
+// error and warning
+void compiler_error(compile_process *compiler, const char *msg, ...);
+void compiler_warning(compile_process *compiler, const char *msg, ...);
 
 #endif // CMM_COMPILER_H

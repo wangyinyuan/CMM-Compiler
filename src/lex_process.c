@@ -1,16 +1,17 @@
 #include "compiler.h"
 #include "../helpers/vector.h"
-#include <stdlib.h>
 
 lex_process *lex_process_create(compile_process *compiler, lex_process_functions *functions, void *data)
 {
     lex_process *process = (lex_process *)malloc(sizeof(lex_process));
     if (!process)
         return NULL;
-
+    // printf("lex_process is not null\n");
     process->compiler = compiler;
     process->function = functions;
-    process->token_vec = vector_create(sizeof(token));
+    // printf("%d", sizeof(struct token));
+    process->token_vec = vector_create(sizeof(struct token));
+
     process->private = data;
     process->pos.col = 1;
     process->pos.line = 1;

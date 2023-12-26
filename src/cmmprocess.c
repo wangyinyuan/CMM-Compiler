@@ -36,7 +36,7 @@ char compile_process_next_char(lex_process *process)
     char c = getc(compiler->input_file->file);
     if (c == '\n')
     {
-        compiler->pos.col = 0;
+        compiler->pos.col = 1;
         compiler->pos.line++;
     }
     return c;

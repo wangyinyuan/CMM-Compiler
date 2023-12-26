@@ -3,12 +3,21 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include "../helpers/buffer.h"
 
+// compile_process 成败返回值
 enum
 {
     SUCCESS,
     FAILURE
+};
+
+// lex_process 成败返回值
+enum
+{
+    LEXICAL_ANALYSIS_ALL_OK,
+    LEXICAL_ANALYSIS_ERROR
 };
 
 enum output_type
@@ -61,18 +70,34 @@ typedef struct token
     const char *between_brackets;
 } token;
 
-struct lex_process;
-typedef char (*LEX_PROCESS_NEXT_CHAR)(lex_process *process);
-typedef char (*LEX_PROCESS_PEEK_CHAR)(lex_process *process);
-typedef void (*LEX_PROCESS_PUSH_CHAR)(lex_process *process, char c);
+/**
+ * @brief Represents the compile process information.
+ *
+ * This struct contains the necessary information for the compile process,
+ * including the filename, output filename,
+ * and output type.
+ */
+typedef struct compile_process compile_process;
 
-typedef struct lex_process_functions
+typedef struct compile_process_input_file
 {
-    LEX_PROCESS_NEXT_CHAR next_char;
-    LEX_PROCESS_PEEK_CHAR peek_char;
-    LEX_PROCESS_PUSH_CHAR push_char;
-} lex_process_functions;
+    FILE *file;
+    const char *abs_path;
+} cfile;
 
+struct compile_process
+{
+
+    cfile *input_file; ///< The input file.
+    FILE *ofile;       ///< The output file.
+    int output_type;   ///< The type of output for the compiler.
+
+    pos pos; ///< The current position of the compiler.
+};
+
+// 词法分析器结构体定义
+
+typedef struct lex_process_functions lex_process_functions;
 typedef struct lex_process
 {
     pos pos;
@@ -86,28 +111,16 @@ typedef struct lex_process
     void *private;
 } lex_process;
 
-/**
- * @brief Represents the compile process information.
- *
- * This struct contains the necessary information for the compile process,
- * including the filename, output filename,
- * and output type.
- */
-typedef struct compile_process_input_file
+typedef char (*LEX_PROCESS_NEXT_CHAR)(lex_process *process);
+typedef char (*LEX_PROCESS_PEEK_CHAR)(lex_process *process);
+typedef void (*LEX_PROCESS_PUSH_CHAR)(lex_process *process, char c);
+
+struct lex_process_functions
 {
-    FILE *file;
-    const char *abs_path;
-} cfile;
-
-typedef struct compile_process
-{
-
-    cfile *input_file; ///< The input file.
-    FILE *ofile;       ///< The output file.
-    int output_type;   ///< The type of output for the compiler.
-
-    pos pos; ///< The current position of the compiler.
-} compile_process;
+    LEX_PROCESS_NEXT_CHAR next_char;
+    LEX_PROCESS_PEEK_CHAR peek_char;
+    LEX_PROCESS_PUSH_CHAR push_char;
+};
 
 int compile_file(const char *filename, const char *output_filename, int output_type);
 compile_process *compile_process_create(const char *filename, const char *output_filename, int output_type);
@@ -116,5 +129,14 @@ compile_process *compile_process_create(const char *filename, const char *output
 char compile_process_next_char(lex_process *process);
 char compile_process_peek_char(lex_process *process);
 void compile_process_push_char(lex_process *process, char c);
+
+// lex_process
+lex_process *lex_process_create(compile_process *compiler, lex_process_functions *functions, void *data);
+void lex_process_free(lex_process *process);
+void *lex_process_private(lex_process *process);
+struct vector *lex_process_tokens(lex_process *process);
+
+// lexer
+int lex(lex_process *process);
 
 #endif // CMM_COMPILER_H

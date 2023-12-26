@@ -28,3 +28,31 @@ compile_process *compile_process_create(const char *filename, const char *output
     process->output_type = output_type;
     return process;
 }
+
+char compile_process_next_char(lex_process *process)
+{
+    compile_process *compiler = process->compiler;
+    compiler->pos.col++;
+    char c = getc(compiler->input_file->file);
+    if (c == '\n')
+    {
+        compiler->pos.col = 0;
+        compiler->pos.line++;
+    }
+    return c;
+}
+
+char compile_process_peek_char(lex_process *process)
+{
+    compile_process *compiler = process->compiler;
+    char c = getc(compiler->input_file->file);
+    ungetc(c, compiler->input_file->file);
+    return c;
+}
+
+void compile_process_push_char(lex_process *process, char c)
+{
+    compile_process *compiler = process->compiler;
+    ungetc(c, compiler->input_file->file);
+    compiler->pos.col--;
+}

@@ -24,7 +24,6 @@ compile_process *compile_process_create(const char *filename, const char *output
         }
     }
 
-
     compile_process *process = (compile_process *)malloc(sizeof(compile_process));
     process->input_file = (cfile *)malloc(sizeof(cfile));
     process->input_file->file = file;

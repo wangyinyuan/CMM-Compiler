@@ -3,6 +3,7 @@
 #include "../helpers/vector.h"
 #include <string.h>
 #include <assert.h>
+#include <ctype.h>
 
 #define LEX_GETC_IF(buffer, c, exp)     \
     for (c = peekc(); exp; c = peekc()) \
@@ -14,6 +15,7 @@
 static lex_process *lex_process_instance;
 static token tem_token;
 token *read_next_token();
+bool lex_is_in_expression();
 
 static char peekc()
 {
@@ -26,6 +28,10 @@ static void pushc(char c)
 static char nextc()
 {
     char c = lex_process_instance->function->next_char(lex_process_instance);
+    if (lex_is_in_expression())
+    {
+        buffer_write(lex_process_instance->parentheses_buffer, c);
+    }
     lex_process_instance->pos.col++;
     if (c == '\n')
     {
@@ -33,6 +39,13 @@ static char nextc()
         lex_process_instance->pos.col = 1;
     }
     return c;
+}
+
+static char assert_next_char(char c)
+{
+    char next = nextc();
+    assert(c == next);
+    return next;
 }
 
 static pos lex_file_position()
@@ -62,6 +75,10 @@ token_create(token *_token)
 {
     memcpy(&tem_token, _token, sizeof(token));
     tem_token.pos = lex_file_position();
+    if (lex_is_in_expression())
+    {
+        tem_token.between_brackets = buffer_ptr(lex_process_instance->parentheses_buffer);
+    }
     return &tem_token;
 }
 
@@ -118,7 +135,7 @@ static token *token_make_string(char start_char, char end_char)
 
 static bool op_treated_as_one(char op)
 {
-    return op == '(' || op == '[' || op == '.' || op == ',' || op == '?' || op == '*' || op == ':';
+    return op == '(' || op == '[' || op == ',' || op == '.' || op == '*' || op == '?';
 }
 
 static bool is_single_operator(char op)
@@ -229,6 +246,15 @@ static void lex_new_expression()
     }
 }
 
+static void lex_end_expression()
+{
+    lex_process_instance->current_expression_count--;
+    if (lex_process_instance->current_expression_count < 0)
+    {
+        compiler_error(lex_process_instance->compiler, "Unexpected ')'\n");
+    }
+}
+
 bool lex_is_in_expression()
 {
     return lex_process_instance->current_expression_count > 0;
@@ -260,17 +286,232 @@ static token *token_make_operator_or_string()
     return token_instance;
 }
 
+static token *token_make_symbol()
+{
+    char c = nextc();
+
+    if (c == ')')
+    {
+        lex_end_expression();
+    }
+
+    token *token_instance = token_create(&(token){
+        .type = TOKEN_TYPE_SYMBOL,
+        .cval = c,
+    });
+    return token_instance;
+}
+
+bool is_keyword(const char *keyword)
+{
+    return S_EQ(keyword, "if") ||
+           S_EQ(keyword, "else") ||
+           S_EQ(keyword, "while") ||
+           S_EQ(keyword, "for") ||
+           S_EQ(keyword, "do") ||
+           S_EQ(keyword, "switch") ||
+           S_EQ(keyword, "case") ||
+           S_EQ(keyword, "default") ||
+           S_EQ(keyword, "break") ||
+           S_EQ(keyword, "continue") ||
+           S_EQ(keyword, "return") ||
+           S_EQ(keyword, "goto") ||
+           S_EQ(keyword, "typedef") ||
+           S_EQ(keyword, "struct") ||
+           S_EQ(keyword, "union") ||
+           S_EQ(keyword, "enum") ||
+           S_EQ(keyword, "extern") ||
+           S_EQ(keyword, "static") ||
+           S_EQ(keyword, "const") ||
+           S_EQ(keyword, "volatile") ||
+           S_EQ(keyword, "register") ||
+           S_EQ(keyword, "auto") ||
+           S_EQ(keyword, "void") ||
+           S_EQ(keyword, "char") ||
+           S_EQ(keyword, "short") ||
+           S_EQ(keyword, "int") ||
+           S_EQ(keyword, "long") ||
+           S_EQ(keyword, "float") ||
+           S_EQ(keyword, "double") ||
+           S_EQ(keyword, "signed") ||
+           S_EQ(keyword, "unsigned") ||
+           S_EQ(keyword, "sizeof") ||
+           S_EQ(keyword, "typeof") ||
+           S_EQ(keyword, "bool") ||
+           S_EQ(keyword, "true") ||
+           S_EQ(keyword, "false") ||
+           S_EQ(keyword, "NULL");
+}
+
+// 生成标识符 token
+static token *
+token_make_identifier_or_keyword()
+{
+    struct buffer *buffer = buffer_create();
+    char c = 0;
+    LEX_GETC_IF(buffer, c, (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_' || (c >= '0' && c <= '9'));
+
+    buffer_write(buffer, 0x00);
+
+    if (is_keyword(buffer_ptr(buffer)))
+    {
+        return token_create(&(token){
+            .type = TOKEN_TYPE_KEYWORD,
+            .sval = buffer_ptr(buffer),
+        });
+    }
+
+    return token_create(&(token){
+        .type = TOKEN_TYPE_IDENTIFIER,
+        .sval = buffer_ptr(buffer),
+    });
+}
+
+token *read_special_token()
+{
+    char c = peekc();
+    if (isalpha(c) || c == '_')
+    {
+        return token_make_identifier_or_keyword();
+    }
+
+    return NULL;
+}
+
+// 生成换行符 token
+static token *token_make_newline()
+{
+    nextc();
+    return token_create(&(token){
+        .type = TOKEN_TYPE_NEWLINE,
+    });
+}
+
+// 单行注释
+static token *token_make_one_line_comment()
+{
+    struct buffer *buffer = buffer_create();
+    char c = 0;
+    LEX_GETC_IF(buffer, c, c != '\n' && c != EOF);
+    return token_create(&(token){
+        .type = TOKEN_TYPE_COMMENT,
+        .sval = buffer_ptr(buffer),
+    });
+}
+
+// 多行注释
+static token *token_make_multiline_comment()
+{
+    struct buffer *buffer = buffer_create();
+    char c = 0;
+    while (1)
+    {
+        LEX_GETC_IF(buffer, c, c != '*' && c != EOF);
+        if (c == EOF)
+        {
+            compiler_error(lex_process_instance->compiler, "你没有关闭多行注释\n");
+        }
+        if (c == '*')
+        {
+            nextc();
+            if (peekc() == '/')
+            {
+                nextc();
+                break;
+            }
+        }
+    }
+
+    return token_create(&(token){
+        .type = TOKEN_TYPE_COMMENT,
+        .sval = buffer_ptr(buffer),
+    });
+}
+
+static token *handle_comment()
+{
+    char c = peekc();
+    if (c == '/')
+    {
+        nextc();
+        if (peekc() == '/')
+        {
+            nextc();
+            return token_make_one_line_comment();
+        }
+        else if (peekc() == '*')
+        {
+            nextc();
+            return token_make_multiline_comment();
+        }
+
+        pushc('/');
+        return token_make_operator_or_string();
+    }
+    return NULL;
+}
+
+char lex_get_escaped_char(char c)
+{
+    char escaped_char = 0;
+    switch (c)
+    {
+    case 'n':
+        escaped_char = '\n';
+        break;
+    case '\\':
+        escaped_char = '\\';
+        break;
+    case 't':
+        escaped_char = '\t';
+        break;
+    case '\'':
+        escaped_char = '\'';
+        break;
+    }
+    return escaped_char;
+}
+
+token *token_make_quote()
+{
+    assert_next_char('\'');
+    char c = nextc();
+    if (c == '\\')
+    {
+        c = nextc();
+        c = lex_get_escaped_char(c);
+    }
+
+    if (nextc() != '\'')
+    {
+        compiler_error(lex_process_instance->compiler, "你没有正确关闭单引号\n");
+    }
+    return token_create(&(token){
+        .type = TOKEN_TYPE_NUMBER,
+        .cval = c,
+    });
+}
+
 token *read_next_token()
 {
     token *token_instance = NULL;
     char c = peekc();
+
+    token_instance = handle_comment();
+    if (token_instance)
+    {
+        return token_instance;
+    }
     switch (c)
     {
     NUMERIC_CASES:
         token_instance = token_make_number();
         break;
-    OPERATOR_CASES_EXCLUDE_DIVISION:
+    OPERATOR_CASES_EXCLUDING_DIVISION:
         token_instance = token_make_operator_or_string();
+        break;
+    SYMBOL_CASE:
+        token_instance = token_make_symbol();
         break;
     case ' ':
     case '\t':
@@ -279,12 +520,22 @@ token *read_next_token()
     case '"': // 字符串
         token_instance = token_make_string('"', '"');
         break;
+    case '\'': // 字符
+        token_instance = token_make_quote();
+        break;
+    case '\n':
+        token_instance = token_make_newline();
+        break;
     case EOF:
         // 读到文件尾部
         break;
 
     default:
-        compiler_error(lex_process_instance->compiler, "Unexpected token\n");
+        token_instance = read_special_token();
+        if (!token_instance)
+        {
+            compiler_error(lex_process_instance->compiler, "Unexpected token\n");
+        }
     }
 
     return token_instance;
@@ -293,7 +544,7 @@ token *read_next_token()
 int lex(lex_process *process)
 {
     process->current_expression_count = 0;
-    process->parentheses_buffer = buffer_create();
+    process->parentheses_buffer = NULL;
     lex_process_instance = process;
     process->pos.filename = process->compiler->input_file->abs_path;
 
@@ -310,4 +561,42 @@ int lex(lex_process *process)
     }
 
     return LEXICAL_ANALYSIS_ALL_OK;
+}
+
+char lexer_string_buffer_next_char(lex_process *process)
+{
+    struct buffer *buffer = lex_process_private(process);
+    return buffer_read(buffer);
+}
+
+char lexer_string_buffer_peek_char(lex_process *process)
+{
+    struct buffer *buffer = lex_process_private(process);
+    return buffer_peek(buffer);
+}
+
+void lexer_string_buffer_push_char(lex_process *process, char c)
+{
+    struct buffer *buffer = lex_process_private(process);
+    buffer_write(buffer, c);
+}
+
+lex_process_functions lexer_string_buffer_functions = {
+    .next_char = lexer_string_buffer_next_char,
+    .peek_char = lexer_string_buffer_peek_char,
+    .push_char = lexer_string_buffer_push_char,
+};
+
+lex_process *token_build_for_string(compile_process *compiler, const char *str)
+{
+    struct buffer *buffer = buffer_create();
+    buffer_printf(buffer, str);
+    lex_process *process = lex_process_create(compiler, &lexer_string_buffer_functions, buffer);
+    if (!lex_process_instance)
+        return NULL;
+
+    if (lex(lex_process_instance) != LEXICAL_ANALYSIS_ALL_OK)
+        return NULL;
+
+    return lex_process_instance;
 }

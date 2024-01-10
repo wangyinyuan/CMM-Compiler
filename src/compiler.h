@@ -44,25 +44,34 @@ enum output_type
     case '9'
 
 // 操作符
-#define OPERATOR_CASES_EXCLUDE_DIVISION \
-    case '+':                           \
-    case '-':                           \
-    case '*':                           \
-    case '/':                           \
-    case '%':                           \
-    case '=':                           \
-    case '!':                           \
-    case '>':                           \
-    case '<':                           \
-    case '&':                           \
-    case '|':                           \
-    case '^':                           \
-    case '?':                           \
-    case ':':                           \
-    case '(':                           \
-    case '[':                           \
-    case '.':                           \
-    case ','
+#define OPERATOR_CASES_EXCLUDING_DIVISION \
+    case '+':                             \
+    case '-':                             \
+    case '*':                             \
+    case '>':                             \
+    case '<':                             \
+    case '^':                             \
+    case '%':                             \
+    case '!':                             \
+    case '=':                             \
+    case '~':                             \
+    case '|':                             \
+    case '&':                             \
+    case '(':                             \
+    case '[':                             \
+    case ',':                             \
+    case '.':                             \
+    case '?'
+
+#define SYMBOL_CASE \
+    case '{':       \
+    case '}':       \
+    case ':':       \
+    case ';':       \
+    case '#':       \
+    case '\\':      \
+    case ')':       \
+    case ']'
 
 // token types
 enum
@@ -181,5 +190,7 @@ int lex(lex_process *process);
 // error and warning
 void compiler_error(compile_process *compiler, const char *msg, ...);
 void compiler_warning(compile_process *compiler, const char *msg, ...);
+
+lex_process *token_build_for_string(compile_process *compiler, const char *str);
 
 #endif // CMM_COMPILER_H

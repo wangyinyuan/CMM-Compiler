@@ -86,6 +86,14 @@ enum
     TOKEN_TYPE_SYMBOL,
 };
 
+enum
+{
+    NUMBER_TYPE_NORMAL,
+    NUMBER_TYPE_LONG,
+    NUMBER_TYPE_FLOAT,
+    NUMBER_TYPE_DOUBLE
+};
+
 typedef struct pos
 {
     int line;
@@ -108,6 +116,11 @@ typedef struct token
         unsigned long long llnum;
         void *any;
     };
+
+    struct token_number
+    {
+        int type;
+    } num;
 
     /**
      * @brief 表示是否包含空白字符的布尔值。
@@ -134,12 +147,15 @@ typedef struct compile_process_input_file
 
 struct compile_process
 {
+    int flags;
 
     cfile *input_file; ///< The input file.
     FILE *ofile;       ///< The output file.
     int output_type;   ///< The type of output for the compiler.
 
     pos pos; ///< The current position of the compiler.
+
+    struct vector *token_vec;
 };
 
 // 词法分析器结构体定义

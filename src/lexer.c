@@ -99,11 +99,31 @@ unsigned long long read_number()
     return strtoull(num_str, NULL, 10);
 }
 
+int lexer_number_type(char c)
+{
+    int res = NUMBER_TYPE_NORMAL;
+    if (c == 'L')
+    {
+        res = NUMBER_TYPE_LONG;
+    }
+    else if (c == 'f')
+    {
+        res = NUMBER_TYPE_FLOAT;
+    }
+    return res;
+}
+
 token *token_make_value_for_number(unsigned long number)
 {
+    int number_type = lexer_number_type(peekc());
+    if (number_type != NUMBER_TYPE_NORMAL)
+    {
+        nextc();
+    }
     return token_create(&(token){
         .type = TOKEN_TYPE_NUMBER,
         .llnum = number,
+        .num.type = number_type,
     });
 }
 

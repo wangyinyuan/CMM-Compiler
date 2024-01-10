@@ -1,6 +1,8 @@
 #include "compiler.h"
+#include "token.h"
 #include "../helpers/vector.h"
 #include <string.h>
+#include <assert.h>
 
 #define LEX_GETC_IF(buffer, c, exp)     \
     for (c = peekc(); exp; c = peekc()) \
@@ -93,6 +95,171 @@ token *token_make_number()
     return token_make_value_for_number(read_number());
 }
 
+// 生成字符 token
+static token *token_make_string(char start_char, char end_char)
+{
+    struct buffer *buffer = buffer_create();
+    assert(nextc() == start_char);
+    char c = nextc();
+    for (; c != end_char && c != EOF; c = nextc())
+    {
+        if (c == '\\')
+        {
+            continue;
+        }
+        buffer_write(buffer, c);
+    }
+    buffer_write(buffer, 0x00);
+    return token_create(&(token){
+        .type = TOKEN_TYPE_STRING,
+        .sval = buffer_ptr(buffer),
+    });
+}
+
+static bool op_treated_as_one(char op)
+{
+    return op == '(' || op == '[' || op == '.' || op == ',' || op == '?' || op == '*' || op == ':';
+}
+
+static bool is_single_operator(char op)
+{
+    return op == '+' || op == '-' || op == '*' || op == '/' || op == '%' || op == '=' || op == '!' || op == '>' || op == '<' || op == '&' || op == '|' || op == '^' || op == '?' || op == '(' || op == '[' || op == '.' || op == ',';
+}
+
+bool op_valid(const char *op)
+{
+    return S_EQ(op, "+") ||
+           S_EQ(op, "-") ||
+           S_EQ(op, "*") ||
+           S_EQ(op, "/") ||
+           S_EQ(op, "!") ||
+           S_EQ(op, "^") ||
+           S_EQ(op, "+=") ||
+           S_EQ(op, "-=") ||
+           S_EQ(op, "*=") ||
+           S_EQ(op, ">>=") ||
+           S_EQ(op, "<<=") ||
+           S_EQ(op, "/=") ||
+           S_EQ(op, ">>") ||
+           S_EQ(op, "<<") ||
+           S_EQ(op, ">=") ||
+           S_EQ(op, "<=") ||
+           S_EQ(op, ">") ||
+           S_EQ(op, "<") ||
+           S_EQ(op, "||") ||
+           S_EQ(op, "&&") ||
+           S_EQ(op, "|") ||
+           S_EQ(op, "&") ||
+           S_EQ(op, "++") ||
+           S_EQ(op, "--") ||
+           S_EQ(op, "=") ||
+           S_EQ(op, "*=") ||
+           S_EQ(op, "^=") ||
+           S_EQ(op, "==") ||
+           S_EQ(op, "!=") ||
+           S_EQ(op, "->") ||
+           S_EQ(op, "**") ||
+           S_EQ(op, "(") ||
+           S_EQ(op, "[") ||
+           S_EQ(op, ",") ||
+           S_EQ(op, ".") ||
+           S_EQ(op, "...") ||
+           S_EQ(op, "~") ||
+           S_EQ(op, "?") ||
+           S_EQ(op, "%");
+}
+
+void read_op_flush_back_keep_first(struct buffer *buffer)
+{
+    const char *data = buffer_ptr(buffer);
+    int len = buffer->len;
+    for (int i = len - 1; i >= 1; i--)
+    {
+        if (data[i] == 0x00)
+        {
+            continue;
+        }
+
+        pushc(data[i]);
+    }
+}
+
+const char *read_op()
+{
+    bool single_operator = true;
+    char op = nextc();
+    struct buffer *buffer = buffer_create();
+    buffer_write(buffer, op);
+
+    if (op_treated_as_one(op))
+    {
+        op = peekc();
+        if (is_single_operator(op))
+        {
+            buffer_write(buffer, op);
+            nextc();
+            single_operator = false;
+        }
+    }
+    buffer_write(buffer, 0x00);
+    char *ptr = buffer_ptr(buffer);
+    if (!single_operator)
+    {
+        if (!op_valid(ptr))
+        {
+            read_op_flush_back_keep_first(buffer);
+            ptr[1] = 0x00;
+        }
+    }
+
+    else if (!op_valid(ptr))
+    {
+        compiler_error(lex_process_instance->compiler, "Unexpected operator %s\n", ptr);
+    }
+
+    return ptr;
+}
+
+static void lex_new_expression()
+{
+    lex_process_instance->current_expression_count++;
+    if (lex_process_instance->current_expression_count == 1)
+    {
+        lex_process_instance->parentheses_buffer = buffer_create();
+    }
+}
+
+bool lex_is_in_expression()
+{
+    return lex_process_instance->current_expression_count > 0;
+}
+
+// 生成操作符 token
+static token *token_make_operator_or_string()
+{
+    char op = peekc();
+    if (op == '<')
+    {
+        token *last_token = lexer_last_token();
+        if (token_is_keyword(last_token, "include"))
+        {
+            return token_make_string('<', '>');
+        }
+    }
+
+    token *token_instance = token_create(&(token){
+        .type = TOKEN_TYPE_OPERATOR,
+        .sval = read_op(),
+    });
+
+    if (op == '(')
+    {
+        lex_new_expression();
+    }
+
+    return token_instance;
+}
+
 token *read_next_token()
 {
     token *token_instance = NULL;
@@ -102,9 +269,15 @@ token *read_next_token()
     NUMERIC_CASES:
         token_instance = token_make_number();
         break;
+    OPERATOR_CASES_EXCLUDE_DIVISION:
+        token_instance = token_make_operator_or_string();
+        break;
     case ' ':
     case '\t':
         token_instance = handle_whitespace();
+        break;
+    case '"': // 字符串
+        token_instance = token_make_string('"', '"');
         break;
     case EOF:
         // 读到文件尾部

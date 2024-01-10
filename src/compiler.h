@@ -4,7 +4,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <string.h>
 #include "../helpers/buffer.h"
+
+#define S_EQ(str1, str2) \
+    (str1 && str2 && strcmp(str1, str2) == 0)
 
 // compile_process 成败返回值
 enum
@@ -38,6 +42,27 @@ enum output_type
     case '7':         \
     case '8':         \
     case '9'
+
+// 操作符
+#define OPERATOR_CASES_EXCLUDE_DIVISION \
+    case '+':                           \
+    case '-':                           \
+    case '*':                           \
+    case '/':                           \
+    case '%':                           \
+    case '=':                           \
+    case '!':                           \
+    case '>':                           \
+    case '<':                           \
+    case '&':                           \
+    case '|':                           \
+    case '^':                           \
+    case '?':                           \
+    case ':':                           \
+    case '(':                           \
+    case '[':                           \
+    case '.':                           \
+    case ','
 
 // token types
 enum

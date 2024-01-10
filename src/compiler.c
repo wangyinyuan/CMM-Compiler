@@ -36,9 +36,9 @@ int compile_file(const char *filename, const char *output_filename, int output_t
         return FAILURE;
 
     // lexical analysis
-    printf("gonna to create lex_process\n");
+
     lex_process *lex_process_instance = lex_process_create(process, &compiler_lex_functions, NULL);
-    printf("lex_process_instance is not null\n");
+
     if (!lex_process_instance)
         return FAILURE;
     if (lex(lex_process_instance) != LEXICAL_ANALYSIS_ALL_OK)

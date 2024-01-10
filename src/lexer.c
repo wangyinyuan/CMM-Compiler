@@ -11,6 +11,7 @@
 
 static lex_process *lex_process_instance;
 static token tem_token;
+token *read_next_token();
 
 static char peekc()
 {
@@ -37,7 +38,25 @@ static pos lex_file_position()
     return lex_process_instance->pos;
 }
 
-token *token_create(token *_token)
+static token *lexer_last_token()
+{
+    return vector_back_or_null(lex_process_instance->token_vec);
+}
+
+// 处理空白字符
+static token *handle_whitespace()
+{
+    token *last_token = lexer_last_token();
+    if (last_token)
+    {
+        last_token->whitespace = true;
+    }
+    nextc();
+    return read_next_token();
+}
+
+token *
+token_create(token *_token)
 {
     memcpy(&tem_token, _token, sizeof(token));
     tem_token.pos = lex_file_position();
@@ -83,6 +102,10 @@ token *read_next_token()
     NUMERIC_CASES:
         token_instance = token_make_number();
         break;
+    case ' ':
+    case '\t':
+        token_instance = handle_whitespace();
+        break;
     case EOF:
         // 读到文件尾部
         break;
@@ -104,6 +127,11 @@ int lex(lex_process *process)
     token *token_instance = read_next_token();
     while (token_instance)
     {
+        // if (token_instance->type == TOKEN_TYPE_NUMBER)
+        // {
+        //     printf("%llu", token_instance->llnum);
+        // }
+
         vector_push(process->token_vec, token_instance);
         token_instance = read_next_token();
     }

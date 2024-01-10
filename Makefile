@@ -12,7 +12,7 @@ HDRS = $(wildcard $(INC_DIR)/*.h)
 HELPER_SRCS = $(wildcard $(HELPER_DIR)/*.c)
 HELPER_OBJS = $(patsubst $(HELPER_DIR)/%.c, $(OBJ_DIR)/$(HELPER_DIR)/%.o, $(HELPER_SRCS))
 
-TARGET = main.out
+TARGET = main
 
 $(TARGET): $(OBJS) $(HELPER_OBJS)
 	$(CC) $(CFLAGS) -o $@ $^

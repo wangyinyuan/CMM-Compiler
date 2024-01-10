@@ -23,14 +23,14 @@ static void vector_assert_bounds_for_pop(struct vector *vector, int index)
 
 struct vector *vector_create_no_saves(size_t esize)
 {
-    printf("Entering vector_create_no_saves\n");
+    // printf("Entering vector_create_no_saves\n");
     struct vector *vector = calloc(sizeof(struct vector), 1);
     if (vector == NULL)
     {
         printf("Failed to allocate memory for vector\n");
         return NULL;
     }
-    printf("Requested memory size: %zu\n", esize * VECTOR_ELEMENT_INCREMENT);
+    // printf("Requested memory size: %zu\n", esize * VECTOR_ELEMENT_INCREMENT);
     vector->data = malloc(esize * VECTOR_ELEMENT_INCREMENT);
     if (vector->data == NULL)
     {
@@ -38,7 +38,7 @@ struct vector *vector_create_no_saves(size_t esize)
         free(vector); // Don't forget to free the previously allocated memory
         return NULL;
     }
-    printf("Allocated data\n");
+    // printf("Allocated data\n");
     vector->mindex = VECTOR_ELEMENT_INCREMENT;
     vector->rindex = 0;
     vector->pindex = 0;

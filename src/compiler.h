@@ -235,6 +235,16 @@ struct node
 
     union
     {
+        struct exp
+        {
+            struct node *left;
+            struct node *right;
+            const char *op;
+        } exp;
+    };
+
+    union
+    {
         char cval;
         const char *sval;
         unsigned int inum;
@@ -288,5 +298,17 @@ struct node *node_peek_or_null();
 struct node *node_peek();
 struct node *node_pop();
 struct node *node_create(struct node *node);
+bool node_is_expressionable(struct node *node);
+struct node *node_peek_expressionable_or_null();
+void make_exp_node(struct node *left_node, struct node *right_node, const char *op);
+
+// history
+enum
+{
+    NODE_FLAG_INSIDE_EXPRESSION = 0b00000001,
+    NODE_FLAG_CLONED = 0b00000010,
+    NODE_FLAG_IS_FORWARD_DECLARATION = 0b00000100,
+    NODE_FLAG_HAS_VARIABLE_COMBINED = 0b00001000
+};
 
 #endif // CMM_COMPILER_H

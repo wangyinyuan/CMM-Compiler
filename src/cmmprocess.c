@@ -3,6 +3,7 @@
 #include <malloc.h>
 
 #include "compiler.h"
+#include "../helpers/vector.h"
 
 compile_process *compile_process_create(const char *filename, const char *output_filename, int output_type)
 {
@@ -25,6 +26,8 @@ compile_process *compile_process_create(const char *filename, const char *output
     }
 
     compile_process *process = (compile_process *)malloc(sizeof(compile_process));
+    process->node_vec = vector_create(sizeof(struct node *));
+    process->node_tree_vec = vector_create(sizeof(struct node *));
     process->input_file = (cfile *)malloc(sizeof(cfile));
     process->input_file->file = file;
     process->ofile = output_file;

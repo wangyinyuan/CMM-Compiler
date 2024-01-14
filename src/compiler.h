@@ -147,7 +147,6 @@ typedef struct compile_process_input_file
 
 struct compile_process
 {
-    int flags;
 
     cfile *input_file; ///< The input file.
     FILE *ofile;       ///< The output file.
@@ -155,7 +154,14 @@ struct compile_process
 
     pos pos; ///< The current position of the compiler.
 
-    struct vector *token_vec;
+    /**
+     * @brief 编译器结构体
+     *
+     * 该结构体包含了编译器所需的向量数据结构。
+     */
+    struct vector *token_vec;     /**< 词法分析结果向量 */
+    struct vector *node_vec;      /**< 语法分析结果向量 */
+    struct vector *node_tree_vec; /**< 语法树向量 */
 };
 
 // 词法分析器结构体定义
@@ -173,6 +179,68 @@ struct lex_process
     lex_process_functions *function;
 
     void *private;
+};
+
+enum
+{
+    PARSE_ALL_OK,
+    PARSE_GENERAL_ERROR
+};
+
+enum
+{
+    NODE_TYPE_EXPRESSION,
+    NODE_TYPE_EXPRESSION_PARENTHESIS,
+    NODE_TYPE_NUMBER,
+    NODE_TYPE_IDENTIFIER,
+    NODE_TYPE_STRING,
+    NODE_TYPE_VARIABLE,
+    NODE_TYPE_VARIABLE_LIST,
+    NODE_TYPE_FUNCTION,
+    NODE_TYPE_BODY,
+    NODE_TYPE_STATEMENT_RETURN,
+    NODE_TYPE_STATEMENT_IF,
+    NODE_TYPE_STATEMENT_ELSE,
+    NODE_TYPE_STATEMENT_WHILE,
+    NODE_TYPE_STATEMENT_DO_WHILE,
+    NODE_TYPE_STATEMENT_FOR,
+    NODE_TYPE_STATEMENT_BREAK,
+    NODE_TYPE_STATEMENT_CONTINUE,
+    NODE_TYPE_STATEMENT_SWITCH,
+    NODE_TYPE_STATEMENT_CASE,
+    NODE_TYPE_STATEMENT_DEFAULT,
+    NODE_TYPE_STATEMENT_GOTO,
+    NODE_TYPE_TENARY,
+    NODE_TYPE_LABEL,
+    NODE_TYPE_UNARY,
+    NODE_TYPE_STRUCT,
+    NODE_TYPE_UNION,
+    NODE_TYPE_BRACKET,
+    NODE_TYPE_CAST,
+    NODE_TYPE_BLANK
+};
+
+struct node
+{
+    int type;
+    int flags;
+
+    struct pos pos;
+
+    struct node_binded
+    {
+        struct node *owner;
+        struct node *function;
+    } binded;
+
+    union
+    {
+        char cval;
+        const char *sval;
+        unsigned int inum;
+        unsigned long lnum;
+        unsigned long long llnum;
+    };
 };
 
 typedef char (*LEX_PROCESS_NEXT_CHAR)(lex_process *process);
@@ -208,5 +276,17 @@ void compiler_error(compile_process *compiler, const char *msg, ...);
 void compiler_warning(compile_process *compiler, const char *msg, ...);
 
 lex_process *token_build_for_string(compile_process *compiler, const char *str);
+
+// parser
+int parse(compile_process *compiler);
+
+// node
+
+void node_set_vector(struct vector *vec, struct vector *root_vec);
+void node_push(struct node *node);
+struct node *node_peek_or_null();
+struct node *node_peek();
+struct node *node_pop();
+struct node *node_create(struct node *node);
 
 #endif // CMM_COMPILER_H

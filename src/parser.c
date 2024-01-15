@@ -1,12 +1,30 @@
 #include "compiler.h"
 #include "../helpers/vector.h"
 #include "token.h"
+#include <assert.h>
 
-// history
 struct history
 {
     int flags;
 };
+
+int parse_expressionable_single(struct history *history);
+void parse_expressionable(struct history *history);
+
+extern struct expressionable_op_precedence_group op_precedence[TOTAL_OPERATOR_GROUPS];
+
+static compile_process *current_process;
+static struct token *parser_last_token;
+static bool token_is_nl_or_comment_or_newline_seperator(struct token *token);
+
+static bool token_is_nl_or_comment_or_newline_seperator(struct token *token)
+{
+    return token->type == TOKEN_TYPE_NEWLINE ||
+           token->type == TOKEN_TYPE_COMMENT ||
+           token_is_symbol(token, '\\');
+}
+
+// history
 
 struct history *history_begin(int flags)
 {
@@ -21,20 +39,6 @@ struct history *history_down(struct history *history, int flags)
     memcpy(new_history, history, sizeof(struct history));
     new_history->flags = flags;
     return new_history;
-}
-
-int parse_expressionable_single(struct history *history);
-void parse_expressionable(struct history *history);
-
-static compile_process *current_process;
-static struct token *parser_last_token;
-static bool token_is_nl_or_comment_or_newline_seperator(struct token *token);
-
-static bool token_is_nl_or_comment_or_newline_seperator(struct token *token)
-{
-    return token->type == TOKEN_TYPE_NEWLINE ||
-           token->type == TOKEN_TYPE_COMMENT ||
-           token_is_symbol(token, '\\');
 }
 
 static void parser_ignore_nl_or_comment(struct token *token)
@@ -90,6 +94,86 @@ void parse_expressionable_for_op(struct history *history, const char *op)
     parse_expressionable(history);
 }
 
+static int parser_get_precedence_for_operator(const char *op, struct expressionable_op_precedence_group **group_out)
+{
+    *group_out = NULL;
+    for (int i = 0; i < TOTAL_OPERATOR_GROUPS; i++)
+    {
+        for (int b = 0; op_precedence[i].operators[b]; b++)
+        {
+            const char *_op = op_precedence[i].operators[b];
+            if (S_EQ(op, _op))
+            {
+
+                *group_out = &op_precedence[i];
+                return i;
+            }
+        }
+    }
+}
+
+static bool parser_left_op_has_priority(const char *op_left, const char *op_right)
+{
+    struct expressionable_op_precedence_group *group_left = NULL;
+    struct expressionable_op_precedence_group *group_right = NULL;
+
+    // Same operator? Then they have equal priority!
+    if (S_EQ(op_left, op_right))
+        return false;
+
+    int precedence_left = parser_get_precedence_for_operator(op_left, &group_left);
+    int precedence_right = parser_get_precedence_for_operator(op_right, &group_right);
+    if (group_left->associativity == ASSOCIATIVITY_RIGHT_TO_LEFT)
+    {
+        return false;
+    }
+
+    return precedence_left <= precedence_right;
+}
+
+void parser_node_shift_children_left(struct node *node)
+{
+    assert(node->type == NODE_TYPE_EXPRESSION);
+    assert(node->exp.right->type == NODE_TYPE_EXPRESSION);
+
+    const char *right_op = node->exp.right->exp.op;
+    struct node *new_exp_left_node = node->exp.left;
+    struct node *new_exp_right_node = node->exp.right->exp.left;
+    make_exp_node(new_exp_left_node, new_exp_right_node, node->exp.op);
+
+    struct node *new_left_operand = node_pop();
+    struct node *new_right_operand = node->exp.right->exp.right;
+    node->exp.left = new_left_operand;
+    node->exp.right = new_right_operand;
+    node->exp.op = right_op;
+}
+
+void parser_reorder_expression(struct node **node_out)
+{
+    struct node *node = *node_out;
+    if (node->type != NODE_TYPE_EXPRESSION)
+    {
+        return;
+    }
+    // 无需重排
+    if (node->exp.left->type != NODE_TYPE_EXPRESSION && node->exp.right && node->exp.right->type != NODE_TYPE_EXPRESSION)
+    {
+        return;
+    }
+
+    if (node->exp.left->type != NODE_TYPE_EXPRESSION && node->exp.right && node->exp.right->type == NODE_TYPE_EXPRESSION)
+    {
+        const char *op = node->exp.right->exp.op;
+        if (parser_left_op_has_priority(node->exp.op, op))
+        {
+            parser_node_shift_children_left(node);
+            parser_reorder_expression(&node->exp.left);
+            parser_reorder_expression(&node->exp.right);
+        }
+        return;
+    }
+}
+
 void parse_expression_normal(struct history *history)
 {
     struct token *token = token_peek_next();
@@ -113,6 +197,7 @@ void parse_expression_normal(struct history *history)
     struct node *exp_node = node_pop();
 
     // 记录表达式
+    parser_reorder_expression(&exp_node);
 
     node_push(exp_node);
 }
@@ -121,6 +206,12 @@ int parse_exp(struct history *history)
 {
     parse_expression_normal(history);
     return 0;
+}
+
+void parse_identifier(struct history *history)
+{
+    assert(token_peek_next()->type == NODE_TYPE_IDENTIFIER);
+    parse_single_token_to_node();
 }
 
 int parse_expressionable_single(struct history *history)
@@ -138,6 +229,10 @@ int parse_expressionable_single(struct history *history)
     {
     case TOKEN_TYPE_NUMBER:
         parse_single_token_to_node();
+        res = 0;
+        break;
+    case TOKEN_TYPE_IDENTIFIER:
+        parse_identifier(history);
         res = 0;
         break;
     case TOKEN_TYPE_OPERATOR:

@@ -16,9 +16,12 @@ extern struct expressionable_op_precedence_group op_precedence[TOTAL_OPERATOR_GR
 static compile_process *current_process;
 static struct token *parser_last_token;
 static bool token_is_nl_or_comment_or_newline_seperator(struct token *token);
+void parser_datatype_init_type_and_size_for_primitive(struct token *datatype_token, struct token *datatype_secondary_token, struct datatype *datatype_out);
 
 static bool token_is_nl_or_comment_or_newline_seperator(struct token *token)
 {
+    if (!token)
+        return false;
     return token->type == TOKEN_TYPE_NEWLINE ||
            token->type == TOKEN_TYPE_COMMENT ||
            token_is_symbol(token, '\\');
@@ -64,6 +67,12 @@ static token *token_peek_next()
     struct token *next_token = vector_peek_no_increment(current_process->token_vec);
     parser_ignore_nl_or_comment(next_token);
     return vector_peek_no_increment(current_process->token_vec);
+}
+
+static bool token_next_is_operator(const char *op)
+{
+    struct token *token = token_peek_next();
+    return token_is_operator(token, op);
 }
 
 void parse_single_token_to_node()
@@ -214,6 +223,271 @@ void parse_identifier(struct history *history)
     parse_single_token_to_node();
 }
 
+static bool is_keyword_variable_modifier(const char *val)
+{
+    return S_EQ(val, "unsigned") ||
+           S_EQ(val, "signed") ||
+           S_EQ(val, "static") ||
+           S_EQ(val, "const") ||
+           S_EQ(val, "extern") ||
+           S_EQ(val, "__ignore_typecheck__");
+}
+
+void parse_datatype_modifiers(struct datatype *dtype)
+{
+    struct token *token = token_peek_next();
+    while (token && token->type == TOKEN_TYPE_KEYWORD)
+    {
+        if (!is_keyword_variable_modifier(token->sval))
+        {
+            break;
+        }
+
+        if (S_EQ(token->sval, "signed"))
+        {
+            dtype->flags |= DATATYPE_FLAG_IS_SIGNED;
+        }
+        else if (S_EQ(token->sval, "unsigned"))
+        {
+            dtype->flags &= ~DATATYPE_FLAG_IS_SIGNED;
+        }
+        else if (S_EQ(token->sval, "static"))
+        {
+            dtype->flags |= DATATYPE_FLAG_IS_STATIC;
+        }
+        else if (S_EQ(token->sval, "const"))
+        {
+            dtype->flags |= DATATYPE_FLAG_IS_CONST;
+        }
+        else if (S_EQ(token->sval, "extern"))
+        {
+            dtype->flags |= DATATYPE_FLAG_IS_EXTERN;
+        }
+        else if (S_EQ(token->sval, "__ignore_typecheck__"))
+        {
+            dtype->flags |= DATATYPE_FLAG_IGNORE_TYPE_CHECKING;
+        }
+
+        token_next();
+        token = token_peek_next();
+    }
+}
+
+void parser_get_datatype_tokens(struct token **datatype_token, struct token **datatype_secondary_token)
+{
+    *datatype_token = token_next();
+    struct token *next_token = token_peek_next();
+    if (token_is_primitive_keyword(next_token))
+    {
+        *datatype_secondary_token = next_token;
+        token_next();
+    }
+}
+
+int parser_datatype_expected_for_type_string(const char *str)
+{
+    int type = DATA_TYPE_EXPECT_PRIMITIVE;
+    if (S_EQ(str, "union"))
+    {
+        type = DATA_TYPE_EXPECT_UNION;
+    }
+    else if (S_EQ(str, "struct"))
+    {
+        type = DATA_TYPE_EXPECT_STRUCT;
+    }
+
+    return type;
+}
+
+token *parser_build_random_type_name()
+{
+    char tmp_name[32];
+    sprintf(tmp_name, "__%d", rand());
+    char *sval = malloc(sizeof(tmp_name));
+    strncpy(sval, tmp_name, sizeof(tmp_name));
+    token *token = calloc(1, sizeof(token));
+    token->type = TOKEN_TYPE_IDENTIFIER;
+    token->sval = sval;
+    return token;
+}
+
+int parser_get_pointer_depth()
+{
+    int depth = 0;
+    while (token_next_is_operator("*"))
+    {
+        depth++;
+        token_next();
+    }
+    return depth;
+}
+
+bool parser_datatype_is_secondary_allowed(int expected_type)
+{
+    return expected_type == DATA_TYPE_EXPECT_PRIMITIVE;
+}
+
+bool parser_datatype_is_secondary_allowed_for_type(const char *type)
+{
+    return S_EQ(type, "long") || S_EQ(type, "short") || S_EQ(type, "double") || S_EQ(type, "float");
+}
+
+void parser_datatype_adjust_size_for_secondary(struct datatype *datatype, struct token *datatype_secondary_token)
+{
+    if (!datatype_secondary_token)
+    {
+        return;
+    }
+
+    struct datatype *secondary_data_type = calloc(sizeof(struct datatype), 1);
+    parser_datatype_init_type_and_size_for_primitive(datatype_secondary_token, NULL, secondary_data_type);
+    datatype->size += secondary_data_type->size;
+    datatype->secondary = secondary_data_type;
+    datatype->flags |= DATATYPE_FLAG_SECONDARY;
+}
+
+void parser_datatype_init_type_and_size_for_primitive(struct token *datatype_token, struct token *datatype_secondary_token, struct datatype *datatype_out)
+{
+    if (!parser_datatype_is_secondary_allowed_for_type(datatype_token->sval) && datatype_secondary_token)
+    {
+        // no secondary is allowed
+        compiler_error(current_process, "Your not allowed a secondary datatype here for the given datatype %s", datatype_token->sval);
+    }
+
+    if (S_EQ(datatype_token->sval, "void"))
+    {
+        datatype_out->type = DATA_TYPE_VOID;
+        datatype_out->size = 0;
+    }
+    else if (S_EQ(datatype_token->sval, "char"))
+    {
+        datatype_out->type = DATA_TYPE_CHAR;
+        datatype_out->size = 1;
+    }
+    else if (S_EQ(datatype_token->sval, "short"))
+    {
+        datatype_out->type = DATA_TYPE_SHORT;
+        datatype_out->size = 2;
+    }
+    else if (S_EQ(datatype_token->sval, "int"))
+    {
+        datatype_out->type = DATA_TYPE_INTEGER;
+        datatype_out->size = 4;
+    }
+    else if (S_EQ(datatype_token->sval, "long"))
+    {
+        // We are a 32 bit compiler so long is 4 bytes.
+        datatype_out->type = DATA_TYPE_LONG;
+        datatype_out->size = 4;
+    }
+    else if (S_EQ(datatype_token->sval, "float"))
+    {
+        datatype_out->type = DATA_TYPE_FLOAT;
+        datatype_out->size = 4;
+    }
+    else if (S_EQ(datatype_token->sval, "double"))
+    {
+        datatype_out->type = DATA_TYPE_DOUBLE;
+        datatype_out->size = 4;
+    }
+    else
+    {
+        compiler_error(current_process, "Bug unexpected primitive variable\n");
+    }
+
+    parser_datatype_adjust_size_for_secondary(datatype_out, datatype_secondary_token);
+}
+
+void parser_datatype_init_type_and_size(struct token *datatype_token, struct token *datatype_secondary_token, struct datatype *datatype_out, int pointer_depth, int expected_type)
+{
+
+    if (!parser_datatype_is_secondary_allowed(expected_type) && datatype_secondary_token)
+    {
+        compiler_error(current_process, "You provided an extra datatype yet this is not a primitive variable");
+    }
+
+    switch (expected_type)
+    {
+    case DATA_TYPE_EXPECT_PRIMITIVE:
+        parser_datatype_init_type_and_size_for_primitive(datatype_token, datatype_secondary_token, datatype_out);
+        break;
+
+    case DATA_TYPE_EXPECT_UNION:
+    case DATA_TYPE_EXPECT_STRUCT:
+        break;
+
+    default:
+        compiler_error(current_process, "Compiler bug unexpected data type expectation");
+    }
+
+    if (pointer_depth > 0)
+    {
+        datatype_out->flags |= DATATYPE_FLAG_IS_POINTER;
+        datatype_out->pointer_depth = pointer_depth;
+    }
+}
+
+void parser_datatype_init(struct token *datatype_token, struct token *datatype_secondary_token, struct datatype *datatype_out, int pointer_depth, int expected_type)
+{
+    parser_datatype_init_type_and_size(datatype_token, datatype_secondary_token, datatype_out, pointer_depth, expected_type);
+    datatype_out->type_str = datatype_token->sval;
+
+    if (S_EQ(datatype_token->sval, "long") && datatype_secondary_token && S_EQ(datatype_secondary_token->sval, "long"))
+    {
+        compiler_warning(current_process, "Our compiler does not support 64 bit long long so it will be treated as a 32 bit type not 64 bit\n");
+        datatype_out->size = DATA_SIZE_DWORD;
+    }
+}
+
+void parse_datatype_type(struct datatype *dtype)
+{
+    token *datatype_token = NULL;
+    token *datatype_secondary_token = NULL;
+    parser_get_datatype_tokens(&datatype_token, &datatype_secondary_token);
+    int expected_type = parser_datatype_expected_for_type_string(datatype_token->sval);
+    if (datatype_is_struct_or_union_for_name(datatype_token->sval))
+    {
+        if (token_peek_next()->type == TOKEN_TYPE_IDENTIFIER)
+        {
+            datatype_token = token_next();
+        }
+        else
+        {
+            // 匿名结构体或联合体
+            datatype_token = parser_build_random_type_name();
+            dtype->flags |= DATATYPE_FLAG_STRUCT_UNION_NO_NAME;
+        }
+    }
+
+    int pointer_depth = parser_get_pointer_depth();
+    parser_datatype_init(datatype_token, datatype_secondary_token, dtype, pointer_depth, expected_type);
+}
+void parse_datatype(struct datatype *dtype)
+{
+    memset(dtype, 0, sizeof(struct datatype));
+    dtype->flags != DATATYPE_FLAG_IS_SIGNED;
+
+    parse_datatype_modifiers(dtype);
+    parse_datatype_type(dtype);
+    parse_datatype_modifiers(dtype);
+}
+
+void parse_variable_function_or_struct_union(struct history *history)
+{
+    struct datatype dtype;
+    parse_datatype(&dtype);
+}
+
+void parse_keyword(struct history *history)
+{
+    struct token *token = token_peek_next();
+    if (is_keyword_variable_modifier(token->sval) || keyword_is_datatype(token->sval))
+    {
+        parse_variable_function_or_struct_union(history);
+        return;
+    }
+}
+
 int parse_expressionable_single(struct history *history)
 {
     struct token *token = token_peek_next();
@@ -239,6 +513,10 @@ int parse_expressionable_single(struct history *history)
         parse_exp(history);
         res = 0;
         break;
+    case TOKEN_TYPE_KEYWORD:
+        parse_keyword(history);
+        res = 0;
+        break;
     }
     return res;
 }
@@ -248,6 +526,12 @@ void parse_expressionable(struct history *history)
     while (parse_expressionable_single(history) == 0)
     {
     }
+}
+
+void parse_keyword_for_global()
+{
+    parse_keyword(history_begin(0));
+    struct node *node = node_pop();
 }
 
 int parse_next()
@@ -267,6 +551,9 @@ int parse_next()
     case TOKEN_TYPE_STRING:
     case TOKEN_TYPE_IDENTIFIER:
         parse_expressionable(history_begin(0));
+        break;
+    case TOKEN_TYPE_KEYWORD:
+        parse_keyword_for_global();
         break;
     default:
         break;

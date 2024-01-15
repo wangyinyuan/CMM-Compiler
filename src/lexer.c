@@ -322,6 +322,19 @@ static token *token_make_symbol()
     return token_instance;
 }
 
+bool keyword_is_datatype(const char *str)
+{
+    return S_EQ(str, "void") ||
+           S_EQ(str, "char") ||
+           S_EQ(str, "int") ||
+           S_EQ(str, "short") ||
+           S_EQ(str, "float") ||
+           S_EQ(str, "double") ||
+           S_EQ(str, "long") ||
+           S_EQ(str, "struct") ||
+           S_EQ(str, "union");
+}
+
 bool is_keyword(const char *keyword)
 {
     return S_EQ(keyword, "if") ||

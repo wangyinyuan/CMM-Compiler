@@ -1,1 +1,1 @@
-signed char
+int y, x = 1;

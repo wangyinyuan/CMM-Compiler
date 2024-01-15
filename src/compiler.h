@@ -147,6 +147,18 @@ typedef struct compile_process_input_file
     const char *abs_path;
 } cfile;
 
+// scope
+struct scope
+{
+    int flags;
+
+    struct vector *entities;
+
+    size_t size;
+
+    struct scope *parent;
+};
+
 struct compile_process
 {
 
@@ -164,6 +176,12 @@ struct compile_process
     struct vector *token_vec;     /**< 词法分析结果向量 */
     struct vector *node_vec;      /**< 语法分析结果向量 */
     struct vector *node_tree_vec; /**< 语法树向量 */
+
+    struct
+    {
+        struct scope *root;
+        struct scope *current;
+    } scope;
 };
 
 // 词法分析器结构体定义
@@ -403,5 +421,20 @@ struct expressionable_op_precedence_group
 
 // datatype
 bool datatype_is_struct_or_union_for_name(const char *name);
+
+// scope functions
+struct scope *scope_alloc();
+struct scope *scope_create_root(struct compile_process *process);
+void scope_free_root(struct compile_process *process);
+struct scope *scope_new(struct compile_process *process, int flags);
+void scope_iteration_start(struct scope *scope);
+void *scope_iterate_back(struct scope *scope);
+void *scope_last_entity_at_scope(struct scope *scope);
+void *scope_last_entity_from_scope_stop_at(struct scope *scope, struct scope *stop_scope);
+void *scope_last_entity_stop_at(struct compile_process *process, struct scope *stop_scope);
+void *scope_last_entity(struct compile_process *process);
+void scope_push(struct compile_process *process, void *ptr, size_t elem_size);
+void scope_finish(struct compile_process *process);
+struct scope *scope_current(struct compile_process *process);
 
 #endif // CMM_COMPILER_H

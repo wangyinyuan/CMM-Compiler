@@ -321,6 +321,17 @@ struct node
         {
             struct vector *list;
         } var_list;
+
+        struct body
+        {
+            struct vector *statements;
+            size_t size;
+            /**
+             * @brief 表示是否进行了填充的布尔值。
+             */
+            bool padded;
+            struct node *largest_var_node;
+        } body;
     };
 
     union
@@ -426,6 +437,7 @@ struct node *node_create(struct node *node);
 bool node_is_expressionable(struct node *node);
 struct node *node_peek_expressionable_or_null();
 void make_exp_node(struct node *left_node, struct node *right_node, const char *op);
+void make_body_node(struct vector *body_vec, size_t size, bool padded, struct node *largest_var_node);
 
 // history
 enum
@@ -453,6 +465,9 @@ struct expressionable_op_precedence_group
 
 // datatype
 bool datatype_is_struct_or_union_for_name(const char *name);
+size_t datatype_element_size(struct datatype *dtype);
+size_t datatype_size_no_ptr(struct datatype *dtype);
+size_t datatype_size(struct datatype *dtype);
 
 // scope functions
 struct scope *scope_alloc();
@@ -468,5 +483,9 @@ void *scope_last_entity(struct compile_process *process);
 void scope_push(struct compile_process *process, void *ptr, size_t elem_size);
 void scope_finish(struct compile_process *process);
 struct scope *scope_current(struct compile_process *process);
+
+// helper
+size_t variable_size(struct node *var_node);
+size_t variable_size_for_list(struct node *var_list_node);
 
 #endif // CMM_COMPILER_H

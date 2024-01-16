@@ -8,6 +8,8 @@ struct history
     int flags;
 };
 
+extern struct node *parser_current_body;
+
 int parse_expressionable_single(struct history *history);
 void parse_expressionable(struct history *history);
 
@@ -55,6 +57,16 @@ static void parser_ignore_nl_or_comment(struct token *token)
     }
 }
 
+void parser_scope_new()
+{
+    scope_new(current_process, 0);
+}
+
+void parser_scope_finish()
+{
+    scope_finish(current_process);
+}
+
 static struct token *token_next()
 {
     struct token *next_token = vector_peek_no_increment(current_process->token_vec);
@@ -80,10 +92,23 @@ static void expect_sym(char c)
     }
 }
 
+static void expect_op(const char *op)
+{
+    struct token *next_token = token_next();
+    if (next_token == NULL || next_token->type != TOKEN_TYPE_OPERATOR || !S_EQ(next_token->sval, op))
+        compiler_error(current_process, "Expecting the operator %s but something else was provided", op);
+}
+
 static bool token_next_is_operator(const char *op)
 {
     struct token *token = token_peek_next();
     return token_is_operator(token, op);
+}
+
+static bool token_next_is_symbol(char sym)
+{
+    struct token *token = token_peek_next();
+    return token_is_symbol(token, sym);
 }
 
 void parse_single_token_to_node()
@@ -536,6 +561,8 @@ void parse_variable_function_or_struct_union(struct history *history)
     struct datatype dtype;
     parse_datatype(&dtype);
 
+    // TODO: 处理 struct and union
+
     parse_ignore_int(&dtype);
 
     struct token *name_token = token_next();
@@ -634,6 +661,101 @@ void parse_expressionable(struct history *history)
     }
 }
 
+void parse_symbol()
+{
+    compiler_error(current_process, "symbol not implemented");
+}
+
+void parse_statement(struct history *history)
+{
+    if (token_peek_next()->type == TOKEN_TYPE_KEYWORD)
+    {
+        parse_keyword(history);
+        return;
+    }
+    parse_expressionable_root(history);
+    if (token_peek_next()->type == TOKEN_TYPE_SYMBOL && !token_is_symbol(token_peek_next(), ';'))
+    {
+        parse_symbol();
+        return;
+    }
+
+    expect_sym(';');
+}
+
+void parser_append_size_for_node(struct history *history, size_t *_variable_size, struct node *node)
+{
+    compiler_warning(current_process, "parser_append_size_for_node not implemented");
+}
+
+void parser_finalize_body(struct history *history, struct node *body_node, struct vector *body_vec, size_t *_variable_size, struct node *largest_align_eligible_var_node, struct node *largest_possible_var_node)
+{
+    //     if (history->flags & HISTORY_FLAG_INSIDE_UNION)
+    //     {
+    //         // Unions variable size is equal to the largest variable node size
+    //         if (largest_possible_var_node)
+    //         {
+    //             *_variable_size = variable_size(largest_possible_var_node);
+    //         }
+    //     }
+
+    //     // Variable size should be adjusted to + the padding of all the body variables padding
+    //     int padding = compute_sum_padding(body_vec);
+    //     *_variable_size += padding;
+
+    //     // Our own variable size must pad to the largest member
+    //     if (largest_align_eligible_var_node)
+    //     {
+    //         *_variable_size = align_value(*_variable_size, largest_align_eligible_var_node->var.type.size);
+    //     }
+    //     // Let's make the body node now we have parsed all statements.
+    // bool padded = padding != 0;
+    body_node->body.largest_var_node = largest_align_eligible_var_node;
+    // body_node->body.padded = padded;
+    body_node->body.size = *_variable_size;
+    body_node->body.statements = body_vec;
+}
+
+void parse_body_single_statement(size_t *variable_size, struct vector *body_vec, struct history *history)
+{
+    make_body_node(NULL, 0, false, NULL);
+    struct node *body_node = node_pop();
+    body_node->binded.owner = parser_current_body;
+    parser_current_body = body_node;
+    struct node *stmt_node = NULL;
+    parse_statement(history_down(history, history->flags));
+    stmt_node = node_pop();
+    vector_push(body_vec, &stmt_node);
+
+    parser_append_size_for_node(history, variable_size, stmt_node);
+    struct node *largest_var_node = NULL;
+    if (stmt_node->type == NODE_TYPE_VARIABLE)
+    {
+        largest_var_node = stmt_node;
+    }
+
+    parser_finalize_body(history, body_node, body_vec, variable_size, largest_var_node, largest_var_node);
+    parser_current_body = body_node->binded.owner;
+
+    node_push(body_node);
+}
+
+void parse_body(size_t *variable_size, struct history *history)
+{
+    parser_scope_new();
+    size_t tem_size = 0x00;
+    if (!variable_size)
+    {
+        variable_size = &tem_size;
+    }
+    struct vector *body_vec = vector_create(sizeof(struct node *));
+    if (!token_next_is_symbol('{'))
+    {
+        parse_body_single_statement(variable_size, body_vec, history);
+    }
+    parser_scope_finish();
+}
+
 void parse_keyword_for_global()
 {
     parse_keyword(history_begin(0));
@@ -672,6 +794,7 @@ int parse_next()
 
 int parse(compile_process *compiler)
 {
+    scope_create_root(compiler);
     current_process = compiler;
     parser_last_token = NULL;
     node_set_vector(compiler->node_vec, compiler->node_tree_vec);

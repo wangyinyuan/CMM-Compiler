@@ -1,1 +1,23 @@
-int y, x = 1;
+#include <stdio.h>
+
+int fibonacci(int n) {
+    int current = 1;
+    int previous = 0;
+    int temp;
+
+    for (int i = 1; i < n; ++i) {
+        temp = current;
+        current += previous;
+        previous = temp;
+    }
+
+    return current;
+}
+
+
+void main(void)
+{
+    int n;
+    n = input();
+    output(fibonacci(n));
+}

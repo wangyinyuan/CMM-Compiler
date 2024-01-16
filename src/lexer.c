@@ -574,6 +574,75 @@ token *read_next_token()
     return token_instance;
 }
 
+void print_token_type(int type)
+{
+    switch (type)
+    {
+    case TOKEN_TYPE_NUMBER:
+        printf("Number");
+        break;
+    case TOKEN_TYPE_STRING:
+        printf("String");
+        break;
+    case TOKEN_TYPE_IDENTIFIER:
+        printf("Identifier");
+        break;
+    case TOKEN_TYPE_KEYWORD:
+        printf("Keyword");
+        break;
+    case TOKEN_TYPE_OPERATOR:
+        printf("Operator");
+        break;
+    case TOKEN_TYPE_SYMBOL:
+        printf("Symbol");
+        break;
+    case TOKEN_TYPE_NEWLINE:
+        printf("Newline");
+        break;
+    case TOKEN_TYPE_COMMENT:
+        printf("Comment");
+        break;
+    default:
+        printf("Unknown");
+        break;
+    }
+}
+
+void print_token_vec(struct vector *token_vec)
+{
+    vector_set_peek_pointer(token_vec, 0);
+    token *token_instance = (struct token *)vector_peek(token_vec);
+    while (token_instance)
+    {
+        print_token_type(token_instance->type);
+        printf(", Value: ");
+        switch (token_instance->type)
+        {
+        case TOKEN_TYPE_NUMBER:
+            printf("%llu", token_instance->llnum);
+            break;
+        case TOKEN_TYPE_STRING:
+        case TOKEN_TYPE_IDENTIFIER:
+        case TOKEN_TYPE_KEYWORD:
+        case TOKEN_TYPE_OPERATOR:
+        case TOKEN_TYPE_COMMENT:
+            printf("'%s'", token_instance->sval);
+            break;
+        case TOKEN_TYPE_SYMBOL:
+            printf("'%c'", token_instance->cval);
+            break;
+        case TOKEN_TYPE_NEWLINE:
+            printf("\\n");
+            break;
+        default:
+            printf("Unknown");
+        }
+        printf(", Position: Line %d, Column %d", token_instance->pos.line, token_instance->pos.col);
+        printf("\n");
+        token_instance = vector_peek(token_vec);
+    }
+}
+
 int lex(lex_process *process)
 {
     process->current_expression_count = 0;
@@ -592,6 +661,7 @@ int lex(lex_process *process)
         vector_push(process->token_vec, token_instance);
         token_instance = read_next_token();
     }
+    print_token_vec(process->token_vec);
 
     return LEXICAL_ANALYSIS_ALL_OK;
 }

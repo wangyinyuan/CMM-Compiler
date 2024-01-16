@@ -48,10 +48,10 @@ int compile_file(const char *filename, const char *output_filename, int output_t
 
     // parsing
 
-    if (parse(process) != PARSE_ALL_OK)
-    {
-        return FAILURE;
-    }
+    // if (parse(process) != PARSE_ALL_OK)
+    // {
+    //     return FAILURE;
+    // }
 
     return SUCCESS;
 }
